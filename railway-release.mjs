@@ -100,6 +100,7 @@ async function smoke() {
     assert.match(home.headers.get('x-robots-tag') ?? '', /noindex/);
   }
 }
+let requestedDeployments;
 if (operation === 'deploy') {
   // A direct, revision-only patch never consumes unrelated staged dashboard changes.
   const patch = {
@@ -116,9 +117,38 @@ if (operation === 'deploy') {
     },
   };
   await api(
-    'mutation($id:String!,$patch:EnvironmentConfig!,$message:String!){environmentPatchCommit(environmentId:$id,patch:$patch,commitMessage:$message)}',
+    'mutation($id:String!,$patch:EnvironmentConfig!,$message:String!){environmentPatchCommit(environmentId:$id,patch:$patch,commitMessage:$message,skipDeploys:true)}',
     { id: environment.id, patch, message: `CI release ${revision}` },
   );
+  let applied = false;
+  for (let attempt = 0; attempt < 30; attempt++) {
+    const snapshot = await api(
+      'query($id:String!){environment(id:$id){config(decryptVariables:false)}}',
+      { id: environment.id },
+    );
+    if (
+      services.every(
+        (id) =>
+          snapshot.environment.config.services[id].source.branch ===
+            `deploy/${revision}` &&
+          snapshot.environment.config.services[id].source.commitSha ===
+            revision,
+      )
+    ) {
+      applied = true;
+      break;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+  }
+  assert.ok(applied, 'Release configuration did not converge');
+  requestedDeployments = [];
+  for (const service of services) {
+    const result = await api(
+      'mutation($id:String!,$service:String!,$sha:String!){serviceInstanceDeployV2(environmentId:$id,serviceId:$service,commitSha:$sha)}',
+      { id: environment.id, service, sha: revision },
+    );
+    requestedDeployments.push(result.serviceInstanceDeployV2);
+  }
 }
 let verified;
 for (let attempt = 0; attempt < (operation === 'deploy' ? 90 : 1); attempt++) {
@@ -131,7 +161,10 @@ for (let attempt = 0; attempt < (operation === 'deploy' ? 90 : 1); attempt++) {
   );
   if (
     apps.every(
-      (app) => app?.status === 'SUCCESS' && app.meta?.commitHash === revision,
+      (app) =>
+        app?.status === 'SUCCESS' &&
+        app.meta?.commitHash === revision &&
+        (!requestedDeployments || requestedDeployments.includes(app.id)),
     )
   ) {
     await smoke();
