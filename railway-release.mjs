@@ -104,8 +104,16 @@ if (operation === 'deploy') {
   // A direct, revision-only patch never consumes unrelated staged dashboard changes.
   const patch = {
     services: Object.fromEntries(
-      services.map((id) => [id, { source: { commitSha: revision } }]),
+      services.map((id) => [
+        id,
+        { source: { branch: `deploy/${revision}`, commitSha: revision } },
+      ]),
     ),
+  };
+  patch.services[services[0]].variables = {
+    CORS_ORIGINS: {
+      value: `${environment.web},tauri://localhost,http://tauri.localhost`,
+    },
   };
   await api(
     'mutation($id:String!,$patch:EnvironmentConfig!,$message:String!){environmentPatchCommit(environmentId:$id,patch:$patch,commitMessage:$message)}',
