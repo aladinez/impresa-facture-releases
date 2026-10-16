@@ -1,0 +1,38 @@
+name: Approve production promotion
+on:
+  workflow_dispatch:
+    inputs:
+      revision:
+        description: Full commit SHA currently passing in staging
+        required: true
+      migration_reviewed:
+        description: I reviewed backward-compatible migrations and backup readiness (synthetic foundation has no customer data)
+        type: boolean
+        required: true
+        default: false
+permissions:
+  contents: read
+concurrency:
+  group: production-promotion
+  cancel-in-progress: false
+jobs:
+  promote:
+    if: inputs.migration_reviewed
+    environment: production
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24.22.0
+      - name: Recheck the staging revision after approval
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_STAGING_TOKEN }}
+          RELEASE_SHA: ${{ inputs.revision }}
+        run: node railway-release.mjs verify staging "$RELEASE_SHA"
+      - name: Rebuild the approved revision in production
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_PRODUCTION_TOKEN }}
+          RELEASE_SHA: ${{ inputs.revision }}
+        run: node railway-release.mjs deploy production "$RELEASE_SHA"
