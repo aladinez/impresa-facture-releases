@@ -21,7 +21,15 @@ The canonical release-control source is maintained in the private application's 
 - [Production 0.1.0 — Windows and macOS](https://github.com/aladinez/impresa-facture-releases/releases/tag/desktop-production-v0.1.0)
 - [Staging 0.1.0 — Windows and macOS](https://github.com/aladinez/impresa-facture-releases/releases/tag/desktop-staging-v0.1.0)
 
-Both are synthetic foundation test releases without OS signing/notarization. Their updater feeds are separate. Desktop building/publication is not automatically performed by the web/API production approval.
+Both are synthetic foundation test releases without OS signing/notarization. Their updater feeds are separate. Desktop building/publication is coupled to web/API releases once the matching private workflow and scoped secrets are configured. After the existing production approval and successful deployment, this controller dispatches the private desktop workflow on the exact immutable application revision. Native builds and version/feed publication then run automatically; install/restart remains a user click.
+
+## Automatic desktop activation
+
+The application repository needs Actions repository secret `RELEASE_ASSETS_TOKEN`, from a fine-grained GitHub token restricted to this public releases repository with Contents read/write. This repository's existing protected **production Environment** needs `DESKTOP_DISPATCH_TOKEN`, restricted to the private `aladinez/impresa-facture` repository with Actions read/write. Keep reviewer/bypass restrictions unchanged; never put the dispatch token in an unrestricted public repository secret. Existing updater and Railway secrets remain unchanged.
+
+Merge the matching private workflow first, then this controller change. Re-run the production workflow on main for the latest automation-capable candidate if its previous approval was queued before this workflow merge; cancel the older waiting approval. Do not approve an older application candidate that lacks the new desktop dispatch inputs. Detailed owner setup and recovery instructions are in the private application's `docs/DESKTOP-AUTOMATION.md`.
+
+The desktop publisher verifies this workflow's successful run and immutable candidate against the build source, checks all native jobs, and rejects superseded promotions. The public controller receives no private application source or updater signing key. A missing dispatch token fails the final step after deployment; restore its secret and retry the controlled workflow without bypassing approval.
 
 ## Automation author
 

@@ -44,3 +44,10 @@ jobs:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_PRODUCTION_TOKEN }}
           RELEASE_SHA: ${{ needs.prepare.outputs.revision }}
         run: node railway-release.mjs deploy production "$RELEASE_SHA"
+      - name: Queue desktop update for the approved production commit
+        env:
+          GH_TOKEN: ${{ secrets.DESKTOP_DISPATCH_TOKEN }}
+          RELEASE_SHA: ${{ needs.prepare.outputs.revision }}
+        run: |
+          test -n "$GH_TOKEN" || { echo "Configure production secret DESKTOP_DISPATCH_TOKEN; see desktop release setup."; exit 1; }
+          gh workflow run desktop.yml --repo aladinez/impresa-facture --ref "deploy/$RELEASE_SHA" -f channel=production -f revision="$RELEASE_SHA" -f publish=true -f promotion_run="$GITHUB_RUN_ID"
