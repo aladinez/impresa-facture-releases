@@ -4,7 +4,7 @@ This repository contains public desktop downloads and production deployment cont
 
 ## Production approval
 
-Open Actions → Approve production promotion → Run workflow. Enter the full commit SHA currently verified in staging and confirm migration/backup review. Then use Review deployments to approve the production job. Only `aladinez` can approve; administrator bypass is disabled. The job verifies staging again after approval and rebuilds that same commit in production. Railway Hobby does not support private registry image pulls, so this is same-commit promotion, not identical-image promotion.
+After successful staging deployment, automation writes `candidate.json` and opens a production approval request. Open Actions → Approve production promotion → the waiting run → Review deployments. Review the linked staging evidence, migrations and backup readiness, then approve production. No SHA entry or manual workflow launch is required. A manual Run workflow remains available to retry the recorded candidate. Only `aladinez` can approve; administrator bypass is disabled. The job verifies staging again after approval and rebuilds that same commit in production. Railway Hobby does not support private registry image pulls, so this is same-commit promotion, not identical-image promotion.
 
 Only web/API revisions change. Production PostgreSQL data is never copied from staging. The API's controlled pre-deploy migration step applies migrations with a database advisory lock. Rollback must use a schema-compatible commit; never automatically reverse migrations.
 

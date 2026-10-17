@@ -1,23 +1,31 @@
 name: Approve production promotion
 on:
+  push:
+    branches: [main]
+    paths: [candidate.json]
   workflow_dispatch:
-    inputs:
-      revision:
-        description: Full commit SHA currently passing in staging
-        required: true
-      migration_reviewed:
-        description: I reviewed backward-compatible migrations and backup readiness (synthetic foundation has no customer data)
-        type: boolean
-        required: true
-        default: false
 permissions:
   contents: read
 concurrency:
   group: production-promotion
   cancel-in-progress: false
 jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      revision: ${{ steps.candidate.outputs.revision }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24.22.0
+      - name: Prepare the tested application revision for review
+        id: candidate
+        run: node prepare-candidate.mjs
   promote:
-    if: inputs.migration_reviewed
+    name: Approve application ${{ needs.prepare.outputs.revision }}
+    needs: prepare
     environment: production
     runs-on: ubuntu-24.04
     timeout-minutes: 25
@@ -29,10 +37,10 @@ jobs:
       - name: Recheck the staging revision after approval
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_STAGING_TOKEN }}
-          RELEASE_SHA: ${{ inputs.revision }}
+          RELEASE_SHA: ${{ needs.prepare.outputs.revision }}
         run: node railway-release.mjs verify staging "$RELEASE_SHA"
       - name: Rebuild the approved revision in production
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_PRODUCTION_TOKEN }}
-          RELEASE_SHA: ${{ inputs.revision }}
+          RELEASE_SHA: ${{ needs.prepare.outputs.revision }}
         run: node railway-release.mjs deploy production "$RELEASE_SHA"

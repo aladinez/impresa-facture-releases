@@ -183,7 +183,7 @@ for (let attempt = 0; attempt < (operation === 'deploy' ? 90 : 1); attempt++) {
     );
   if (operation === 'verify')
     throw new Error(
-      'Both running staging deployments must match the requested successful revision.',
+      `Expected ${target} application commit ${revision}; found ${apps.map((app) => `${app?.meta?.commitHash ?? 'unknown'} (${app?.status ?? 'missing'})`).join(', ')}. Use the application revision, not the releases repository revision.`,
     );
   console.log(
     `${target}: waiting for ${revision.slice(0, 7)} (${apps.map((app) => app?.status ?? 'pending').join(', ')})`,
