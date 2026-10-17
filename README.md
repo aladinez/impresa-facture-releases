@@ -15,3 +15,14 @@ Windows installers (`.exe`) and macOS installers (`.dmg`) belong under Releases.
 No installers are published until the release build succeeds. Initial builds are test builds: Apple notarization and Windows Authenticode certificates have not yet been supplied. Tauri update signatures authenticate updates but do not replace operating-system code signing.
 
 The canonical release-control source is maintained in the private application's `infra/release-control` directory. Do not copy application source or secrets into this repository.
+
+## Current test downloads
+
+- [Production 0.1.0 — Windows and macOS](https://github.com/aladinez/impresa-facture-releases/releases/tag/desktop-production-v0.1.0)
+- [Staging 0.1.0 — Windows and macOS](https://github.com/aladinez/impresa-facture-releases/releases/tag/desktop-staging-v0.1.0)
+
+Both are synthetic foundation test releases without OS signing/notarization. Their updater feeds are separate. Desktop building/publication is not automatically performed by the web/API production approval.
+
+## Automation author
+
+`Impresa release automation` is a Git commit author label. It uses the explicitly approved write deploy key scoped to this repository, with its private half stored in the private application repository’s Actions secrets. It writes release candidates after staging succeeds; it does not approve production. Revoke the deploy key and remove `RELEASE_CANDIDATE_SSH_KEY` from the private repository to disable this connection. No new GitHub user account was created.
