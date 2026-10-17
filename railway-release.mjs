@@ -10,7 +10,7 @@ const environments = {
   },
   production: {
     id: 'a8c4fcba-969f-41bd-b3e1-c82a29097e88',
-    web: 'https://appweb-production-caa3.up.railway.app',
+    web: 'https://facture.impresa.ma',
     api: 'https://appapi-production-91fb.up.railway.app',
   },
 };
