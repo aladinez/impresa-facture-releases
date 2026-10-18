@@ -27,8 +27,10 @@ jobs:
     name: Approve application ${{ needs.prepare.outputs.revision }}
     needs: prepare
     environment: production
+    permissions:
+      contents: write
     runs-on: ubuntu-24.04
-    timeout-minutes: 100
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
@@ -39,22 +41,16 @@ jobs:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_STAGING_TOKEN }}
           RELEASE_SHA: ${{ needs.prepare.outputs.revision }}
         run: node railway-release.mjs verify staging "$RELEASE_SHA"
-      - name: Start desktop release before changing production web
-        id: desktop
+      - name: Verify prepared production desktop before changing web
         env:
-          GH_TOKEN: ${{ secrets.DESKTOP_DISPATCH_TOKEN }}
-          RELEASE_SHA: ${{ needs.prepare.outputs.revision }}
-        run: |
-          test -n "$GH_TOKEN" || { echo "Configure production Environment secret DESKTOP_DISPATCH_TOKEN with private repository Actions read/write."; exit 1; }
-          node desktop-release.mjs start "$RELEASE_SHA" "$GITHUB_RUN_ID"
+          GH_TOKEN: ${{ github.token }}
+        run: node desktop-release.mjs prepare
       - name: Rebuild the approved revision in production
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_PRODUCTION_TOKEN }}
           RELEASE_SHA: ${{ needs.prepare.outputs.revision }}
         run: node railway-release.mjs deploy production "$RELEASE_SHA"
-      - name: Wait for production desktop and verify its signed update feed
+      - name: Publish the approved desktop release and signed update
         env:
-          GH_TOKEN: ${{ secrets.DESKTOP_DISPATCH_TOKEN }}
-          RELEASE_SHA: ${{ needs.prepare.outputs.revision }}
-          DESKTOP_RUN: ${{ steps.desktop.outputs.run }}
-        run: node desktop-release.mjs wait "$RELEASE_SHA" "$DESKTOP_RUN"
+          GH_TOKEN: ${{ github.token }}
+        run: node desktop-release.mjs publish
