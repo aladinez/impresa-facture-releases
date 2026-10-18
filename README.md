@@ -9,7 +9,7 @@ Choose one installer: **Windows x64 EXE**, **Mac Apple Silicon DMG**, or **Mac I
 
 Both apps check for signed updates at startup, download automatically, then show **Installer et redémarrer**. Staging and production use separate API environments and update feeds. Save your work before restarting.
 
-Apple notarization and Windows Authenticode are not configured. Keep system security settings enabled.
+Production installers are customer releases under the owner’s accepted unsigned OS distribution policy. Apple notarization and Windows Authenticode are deferred until requested. Tauri updates remain signed. Keep system security settings enabled.
 
 ## Release process
 

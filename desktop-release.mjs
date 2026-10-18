@@ -231,7 +231,7 @@ export async function releaseDesktop(
       '--notes-file',
       notes,
       '--draft',
-      '--prerelease',
+      '--prerelease=false',
       '--latest=false',
     ]);
   if (!existing || existing.isDraft)
@@ -264,7 +264,7 @@ export async function releaseDesktop(
       '--repo',
       repository,
       '--draft=false',
-      '--prerelease',
+      '--prerelease=false',
       '--latest=false',
     ]);
   command([
@@ -277,6 +277,7 @@ export async function releaseDesktop(
     `Production downloads — ${version}`,
     '--notes-file',
     notes,
+    '--prerelease=false',
   ]);
   // Advance latest only after every installer and updater upload succeeds.
   command([
