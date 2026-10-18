@@ -1,13 +1,7 @@
-import assert from 'node:assert/strict';
+import { validateCandidate } from './desktop-release.mjs';
 import { readFileSync, appendFileSync } from 'node:fs';
 const candidate = JSON.parse(readFileSync('candidate.json', 'utf8'));
-assert.equal(candidate.repository, 'aladinez/impresa-facture');
-assert.match(candidate.revision ?? '', /^[a-f0-9]{40}$/);
-assert.match(
-  candidate.stagingRun ?? '',
-  /^https:\/\/github\.com\/aladinez\/impresa-facture\/actions\/runs\/\d+$/,
-);
-assert.match(candidate.desktopVersion ?? '', /^\d+\.\d+\.\d+$/);
+validateCandidate(candidate);
 appendFileSync(process.env.GITHUB_OUTPUT, `revision=${candidate.revision}\n`);
 appendFileSync(
   process.env.GITHUB_STEP_SUMMARY,

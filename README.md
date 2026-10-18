@@ -14,18 +14,18 @@ Apple notarization and Windows Authenticode are not configured. Keep system secu
 ## Release process
 
 1. Merge the application PR after **Validate** passes.
-2. Staging web/API deploy, then all three staging desktop installers publish. Only then is production approval offered.
+2. Staging web/API deploy, then both desktop variants are built and staging installers publish. Production binaries stay in a draft until approval. Only then is production approval offered.
 3. Approve the single **production** Environment request. Production web/API deploy and production desktop publishes with the **same version and source commit** as staging.
-4. The production workflow succeeds after its desktop build and public update feed are verified. Its summary links the installers.
+4. The production workflow succeeds after the prepared desktop files publish and the public update feed is verified. Its summary links the installers.
 
 Only approve the latest candidate. A newer staging deployment intentionally blocks approval of an older commit. No manual workflow dispatch, version entry or second production approval is required in the normal flow.
 
-The controller is maintained in the private application repository and synchronized here automatically with each ready staging candidate. Application source, updater private keys and customer data remain private. Production data is never copied from staging.
+The runtime controller scripts are maintained in the private application repository and synchronized here automatically with each ready staging candidate. The protected workflow is installed separately through a reviewed maintainer change; routine bot pushes do not modify workflow files. Application source, updater private keys and customer data remain private. Production data is never copied from staging.
 
 ## One-time credentials and recovery
 
-The private application's Actions secret `RELEASE_ASSETS_TOKEN` needs Contents read/write on this releases repository. This repository's protected **production Environment** secret `DESKTOP_DISPATCH_TOKEN` needs Actions read/write on the private `aladinez/impresa-facture` repository. Keep the existing required reviewer and bypass restrictions.
+The private application's Actions secret `RELEASE_ASSETS_TOKEN` needs Contents read/write on this releases repository. The protected production job uses its own `GITHUB_TOKEN` to publish already prepared production files; it needs no token or access to the private repository. Keep the existing required reviewer and bypass restrictions.
 
-A token rejected with HTTP 403 must be corrected in GitHub account fine-grained token settings and saved to the matching secret. The controller checks desktop dispatch before changing production web. After correcting configuration, rerun the failed production job through its existing approval gate. Desktop retries reuse the original build where possible.
+For failed builds/uploads, rerun the failed jobs. Production verifies the prepared archive checksum before changing web/API and publishes desktop afterward. Published installers are never overwritten; retries can finish a failed channel upload. The obsolete `DESKTOP_DISPATCH_TOKEN` is no longer used.
 
 `Impresa release automation` is the commit author used by the existing repository-scoped deploy key. It prepares candidates and synchronizes this controller; it does not approve production or create a GitHub account.
