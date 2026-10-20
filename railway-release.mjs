@@ -27,6 +27,66 @@ assert.ok(
   'Environment-scoped RAILWAY_TOKEN required in CI',
 );
 const environment = environments[target];
+function checkResult(result, query) {
+  if (!result.errors?.length) return;
+  // Report only known categories. Provider messages can contain variables or
+  // credentials; never dump the response, query variables or arbitrary text.
+  const categories = result.errors.map(({ message = '', extensions }) => {
+    const code = extensions?.code;
+    if (
+      /unauthori[sz]ed|forbidden|permission|access denied|invalid token/i.test(
+        message,
+      )
+    )
+      return 'authorization';
+    if (
+      /deploys have been paused temporarily|builds.*temporarily paused/i.test(
+        message,
+      )
+    )
+      return 'Railway deployments temporarily paused; retry after provider recovery';
+    if (/rate limit|too many requests/i.test(message)) return 'rate limit';
+    if (
+      /build.*limit|deployment.*limit|usage.*limit|billing|credits/i.test(
+        message,
+      )
+    )
+      return 'plan or usage limit';
+    if (/commit|branch|repository|github/i.test(message))
+      return 'source access or revision';
+    if (
+      /cannot query field|unknown argument|syntax error|validation/i.test(
+        message,
+      )
+    )
+      return 'API schema or validation';
+    if (/not found|does not exist/i.test(message)) return 'resource not found';
+    if (/timeout|timed out|temporar|internal server/i.test(message))
+      return 'provider availability';
+    return [
+      'UNAUTHENTICATED',
+      'FORBIDDEN',
+      'BAD_USER_INPUT',
+      'INTERNAL_SERVER_ERROR',
+    ].includes(code)
+      ? code
+      : 'unclassified provider rejection (details withheld)';
+  });
+  if (
+    categories.some((category) =>
+      category.startsWith('Railway deployments temporarily paused'),
+    ) &&
+    process.env.GITHUB_STEP_SUMMARY
+  )
+    appendFileSync(
+      process.env.GITHUB_STEP_SUMMARY,
+      '\nRailway has temporarily paused deployment creation. Existing services stay on their current deployments. Check [Railway status](https://status.railway.com/) and retry the latest staging candidate after provider recovery; do not rotate credentials or bypass production approval.\n',
+    );
+  const action = query.match(/\{\s*(\w+)/)?.[1] ?? 'unknown';
+  throw new Error(
+    `Railway ${target} ${action} rejected: ${[...new Set(categories)].join(', ')}. Inspect Railway activity before retrying; no automatic rollback or mutation retry was attempted.`,
+  );
+}
 async function api(query, variables) {
   if (!process.env.RAILWAY_TOKEN) {
     const result = JSON.parse(
@@ -43,7 +103,7 @@ async function api(query, variables) {
         { encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'] },
       ),
     );
-    assert.ok(!result.errors, 'Railway API rejected the operation');
+    checkResult(result, query);
     return result.data;
   }
   const response = await fetch('https://backboard.railway.com/graphql/v2', {
@@ -57,10 +117,7 @@ async function api(query, variables) {
   });
   assert.equal(response.status, 200, 'Railway API request failed');
   const result = await response.json();
-  assert.ok(
-    !result.errors,
-    'Railway rejected the release operation (credentials/scope/schema)',
-  );
+  checkResult(result, query);
   return result.data;
 }
 async function state() {
@@ -143,11 +200,26 @@ if (operation === 'deploy') {
   assert.ok(applied, 'Release configuration did not converge');
   requestedDeployments = [];
   for (const service of services) {
+    console.log(`${target}: requesting ${service} at ${revision}`);
     const result = await api(
       'mutation($id:String!,$service:String!,$sha:String!){serviceInstanceDeployV2(environmentId:$id,serviceId:$service,commitSha:$sha)}',
       { id: environment.id, service, sha: revision },
     );
+    assert.equal(
+      typeof result.serviceInstanceDeployV2,
+      'string',
+      'Railway did not return a deployment ID',
+    );
+    assert.ok(
+      /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(
+        result.serviceInstanceDeployV2,
+      ),
+      'Railway returned an invalid deployment ID',
+    );
     requestedDeployments.push(result.serviceInstanceDeployV2);
+    console.log(
+      `${target}: requested ${service} deployment ${result.serviceInstanceDeployV2}`,
+    );
   }
 }
 let verified;
