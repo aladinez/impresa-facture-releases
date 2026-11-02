@@ -29,3 +29,7 @@ The private application's Actions secret `RELEASE_ASSETS_TOKEN` needs Contents r
 For failed builds/uploads, rerun the failed jobs. Production verifies the prepared archive checksum before changing web/API and publishes desktop afterward. Published installers are never overwritten; retries can finish a failed channel upload. The obsolete `DESKTOP_DISPATCH_TOKEN` is no longer used.
 
 `Impresa release automation` is the commit author used by the existing repository-scoped deploy key. It prepares candidates and synchronizes this controller; it does not approve production or create a GitHub account.
+
+## Admin-only candidates
+
+An isolated admin change can queue an admin scope through the same protected workflow. The summary names its admin revision and the required customer API/web baseline. After owner approval, staging and that baseline are rechecked, only admin deploys, and desktop steps validate the candidate then leave installers and update feeds unchanged. Shared/API/dependency/infrastructure changes retain the complete release and checksum-pinned desktop preparation. Candidate/controller synchronization never modifies this repository's workflow or reviewer settings.

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { appendFileSync } from 'node:fs';
+import { appendFileSync, existsSync, readFileSync } from 'node:fs';
+import { validateAdminCandidate } from './release-scope.mjs';
 
 const environments = {
   staging: {
@@ -14,7 +15,7 @@ const environments = {
     api: 'https://appapi-production-91fb.up.railway.app',
   },
 };
-const services = [
+const customerServices = [
   '88bcf134-979d-415b-9dc9-52690d90cf73',
   'e098d368-8a9f-4091-bcf5-05d9f76415a7',
 ];
@@ -27,6 +28,23 @@ assert.ok(
   'Environment-scoped RAILWAY_TOKEN required in CI',
 );
 const environment = environments[target];
+const candidate = existsSync('candidate.json')
+  ? JSON.parse(readFileSync('candidate.json', 'utf8'))
+  : null;
+assert.ok(
+  !candidate || !process.env.RELEASE_SCOPE,
+  'Candidate and explicit release scope must not be mixed',
+);
+if (candidate?.scope === 'admin') {
+  validateAdminCandidate(candidate);
+  assert.equal(candidate.revision, revision);
+}
+const scope = candidate?.scope ?? process.env.RELEASE_SCOPE ?? 'full';
+assert.ok(['full', 'admin'].includes(scope));
+const baseline = candidate?.baselineRevision ?? process.env.RELEASE_BASELINE;
+if (scope === 'admin') assert.match(baseline ?? '', /^[a-f0-9]{40}$/);
+let services;
+let adminOrigin;
 function checkResult(result, query) {
   if (!result.errors?.length) return;
   // Report only known categories. Provider messages can contain variables or
@@ -123,12 +141,26 @@ async function api(query, variables) {
 async function state() {
   return (
     await api(
-      'query($id:String!){environment(id:$id){name serviceInstances{edges{node{serviceId latestDeployment{id status meta}}}}}}',
+      'query($id:String!){environment(id:$id){name serviceInstances{edges{node{serviceId serviceName latestDeployment{id status meta}}}}}}',
       { id: environment.id },
     )
   ).environment;
 }
 async function smoke() {
+  if (adminOrigin) {
+    for (const path of ['/health/live', '/health/ready', '/']) {
+      const response = await fetch(adminOrigin + path, {
+        signal: globalThis.AbortSignal.timeout(15000),
+      });
+      assert.equal(response.status, 200, 'Admin health/page unavailable');
+      assert.match(response.headers.get('x-robots-tag') ?? '', /noindex/);
+      assert.match(response.headers.get('cache-control') ?? '', /no-store/);
+    }
+    const session = await fetch(adminOrigin + '/api/me', {
+      signal: globalThis.AbortSignal.timeout(15000),
+    });
+    assert.equal(session.status, 401, 'Admin operator boundary unavailable');
+  }
   for (const url of [
     environment.web + '/health/live',
     environment.api + '/health/ready',
@@ -157,6 +189,49 @@ async function smoke() {
     assert.match(home.headers.get('x-robots-tag') ?? '', /noindex/);
   }
 }
+// Discover the separately authorized service; do not invent service IDs/hostnames.
+const initial = await state();
+assert.equal(initial.name, target);
+const instances = initial.serviceInstances.edges.map(({ node }) => node);
+const admins = instances.filter((node) => node.serviceName === '@app/admin');
+assert.ok(admins.length <= 1, 'Ambiguous admin service');
+const admin = admins[0];
+if (scope === 'admin')
+  assert.ok(
+    admin,
+    'Provision/configure the admin service separately before releasing it',
+  );
+if (admin) {
+  assert.match(admin.serviceId, /^[a-f0-9-]{36}$/);
+  const domains = await api(
+    'query($project:String!,$environment:String!,$service:String!){domains(projectId:$project,environmentId:$environment,serviceId:$service){serviceDomains{domain}}}',
+    {
+      project: 'b007a1a0-4ac8-4847-b211-cbf4f4a73c24',
+      environment: environment.id,
+      service: admin.serviceId,
+    },
+  );
+  const domain = domains.domains.serviceDomains[0]?.domain;
+  assert.match(domain ?? '', /^[a-z0-9-]+\.up\.railway\.app$/);
+  adminOrigin = `https://${domain}`;
+}
+function checkBaseline(current) {
+  if (scope !== 'admin') return;
+  for (const id of customerServices) {
+    const deployed = current.serviceInstances.edges.find(
+      ({ node }) => node.serviceId === id,
+    )?.node.latestDeployment;
+    assert.ok(
+      deployed?.status === 'SUCCESS' && deployed.meta?.commitHash === baseline,
+      'Customer services changed or are not at the published baseline; use the complete release path',
+    );
+  }
+}
+checkBaseline(initial);
+services =
+  scope === 'admin'
+    ? [admin.serviceId]
+    : [...customerServices, ...(admin ? [admin.serviceId] : [])];
 let requestedDeployments;
 if (operation === 'deploy') {
   // A direct, revision-only patch never consumes unrelated staged dashboard changes.
@@ -168,11 +243,12 @@ if (operation === 'deploy') {
       ]),
     ),
   };
-  patch.services[services[0]].variables = {
-    CORS_ORIGINS: {
-      value: `${environment.web},tauri://localhost,http://tauri.localhost`,
-    },
-  };
+  if (scope === 'full')
+    patch.services[customerServices[0]].variables = {
+      CORS_ORIGINS: {
+        value: `${environment.web},tauri://localhost,http://tauri.localhost`,
+      },
+    };
   await api(
     'mutation($id:String!,$patch:EnvironmentConfig!,$message:String!){environmentPatchCommit(environmentId:$id,patch:$patch,commitMessage:$message,skipDeploys:true)}',
     { id: environment.id, patch, message: `CI release ${revision}` },
@@ -226,6 +302,7 @@ let verified;
 for (let attempt = 0; attempt < (operation === 'deploy' ? 90 : 1); attempt++) {
   const current = await state();
   assert.equal(current.name, target);
+  checkBaseline(current);
   const apps = services.map(
     (id) =>
       current.serviceInstances.edges.find(({ node }) => node.serviceId === id)
@@ -265,6 +342,7 @@ for (let attempt = 0; attempt < (operation === 'deploy' ? 90 : 1); attempt++) {
 assert.ok(verified, 'Timed out waiting for the selected revision');
 const evidence = {
   environment: target,
+  scope,
   revision,
   deployments: verified.map((app) => ({
     id: app.id,

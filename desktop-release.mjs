@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { validateAdminCandidate } from './release-scope.mjs';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {
@@ -21,6 +22,8 @@ import {
 
 const repository = 'aladinez/impresa-facture-releases';
 export function validateCandidate(candidate) {
+  if (candidate.scope === 'admin') return validateAdminCandidate(candidate);
+  assert.ok(candidate.scope === undefined || candidate.scope === 'full');
   assert.equal(candidate.repository, 'aladinez/impresa-facture');
   assert.match(candidate.revision ?? '', /^[a-f0-9]{40}$/);
   assert.match(
@@ -69,6 +72,10 @@ export async function releaseDesktop(
 ) {
   assert.ok(['prepare', 'publish'].includes(mode));
   validateCandidate(candidate);
+  if (candidate.scope === 'admin') {
+    console.log('Admin-only candidate: desktop publication is unchanged.');
+    return;
+  }
   const version = candidate.desktopVersion;
   const runId = candidate.stagingRun.split('/').at(-1);
   const reused =
