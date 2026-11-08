@@ -1,8 +1,8 @@
 {
   "repository": "aladinez/impresa-facture",
-  "revision": "5dcb95db24e1cb6d65929afcc28473fe17d7c09d",
-  "stagingRun": "https://github.com/aladinez/impresa-facture/actions/runs/42496314668",
-  "preparedAt": "2026-11-08T16:24:08.084Z",
-  "desktopVersion": "0.2.42",
-  "desktopArchiveSha256": "760f9700dba045145baadb68935854de8a84d90b1e48e89ebbe60f42716bd796"
+  "revision": "aa35106d82950d5ad71cb08243c83f48ebee621b",
+  "stagingRun": "https://github.com/aladinez/impresa-facture/actions/runs/42501937455",
+  "preparedAt": "2026-11-08T16:59:35.588Z",
+  "desktopVersion": "0.2.43",
+  "desktopArchiveSha256": "67341af5c5463af09f524f875af92c39d708c3e45557df41504a914e28eac88a"
 }
